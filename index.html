@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Essential Scripts: A-Frame and MindAR -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <title>WebAR Video Tracker (Debug Mode)</title>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* Loading Screen UI */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #111;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            transition: opacity 0.5s ease;
+        }
+
+        /* Error Logging UI */
+        #error-log {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            padding: 15px 25px;
+            z-index: 2000;
+            display: none;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Scanning Instructions UI */
+        #scanning-overlay {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 40px;
+            font-size: 16px;
+            font-weight: 500;
+            z-index: 500;
+            display: none;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Overlay UI Elements -->
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <p id="loading-text">Initializing AR Engine...</p>
+    </div>
+
+    <div id="error-log"></div>
+
+    <div id="scanning-overlay">
+        Scan the card to start AR
+    </div>
+
+    <!-- 
+        AR Scene Setup 
+        imageTargetSrc: Points to your local targets.mind
+        uiLoading/uiError: Set to no as we use custom overlays
+    -->
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiError: no;"
+        color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
+
+        <a-assets>
+            <video id="ar-video" src="./sample.mp4" preload="auto" loop="true" muted playsinline webkit-playsinline>
+            </video>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- Target matching targetIndex: 0 in targets.mind -->
+        <a-entity id="target-entity" mindar-image-target="targetIndex: 0">
+            <a-video id="video-display" src="#ar-video" width="1" height="0.55" position="0 0 0" opacity="0">
+            </a-video>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const sceneEl = document.querySelector('a-scene');
+            const targetEl = document.querySelector('#target-entity');
+            const video = document.querySelector('#ar-video');
+            const videoDisplay = document.querySelector('#video-display');
+            const loading = document.querySelector('#loading-screen');
+            const errorLog = document.querySelector('#error-log');
+            const scanning = document.querySelector('#scanning-overlay');
+
+            // Handle Successful Scene Initialization
+            sceneEl.addEventListener("ready", () => {
+                console.log("MindAR is ready");
+                setTimeout(() => {
+                    loading.style.opacity = "0";
+                    setTimeout(() => {
+                        loading.style.display = "none";
+                        scanning.style.display = "block";
+                    }, 500);
+                }, 1000); // Give it a second to settle
+            });
+
+            // Handle Initialization Errors (Camera, File Not Found, etc.)
+            sceneEl.addEventListener("arError", (event) => {
+                console.error("AR Error:", event.detail.error);
+                loading.style.display = "none";
+                errorLog.style.display = "block";
+
+                let errorMsg = event.detail.error;
+                if (errorMsg.includes("Permissions")) {
+                    errorMsg = "Camera access denied. Please allow camera permissions in your settings.";
+                } else if (errorMsg.includes("load")) {
+                    errorMsg = "Failed to load 'targets.mind'. Check if the file name is correct and in the root folder.";
+                }
+
+                errorLog.innerHTML = `<strong>AR Error:</strong><br>${errorMsg}`;
+            });
+
+            // Tracking Logic
+            targetEl.addEventListener("targetFound", () => {
+                console.log("Target Found");
+                scanning.style.display = "none";
+                video.play();
+                videoDisplay.setAttribute("opacity", "1");
+            });
+
+            targetEl.addEventListener("targetLost", () => {
+                console.log("Target Lost");
+                scanning.style.display = "block";
+                video.pause();
+                videoDisplay.setAttribute("opacity", "0");
+            });
+        });
+    </script>
+</body>
+
+</html>
